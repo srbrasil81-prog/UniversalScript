@@ -1,0 +1,7 @@
+local UserInputService = game:GetService("UserInputService")
+
+if UserInputService.TouchEnabled then
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/srbrasil81-prog/UniversalScript/refs/heads/main/Lock"))()
+else
+    print("Jogador está no PC 🖥️")
+end
