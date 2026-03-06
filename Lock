@@ -1,0 +1,166 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+local enabled = false
+local target = nil
+local connection = nil
+local diamond = nil
+
+local gui = Instance.new("ScreenGui")
+gui.Parent = player:WaitForChild("PlayerGui")
+gui.ResetOnSpawn = false
+
+local button = Instance.new("TextButton")
+button.Size = UDim2.fromOffset(50,50)
+button.Position = UDim2.new(1,-250,0,190)
+button.Text = "Lock: OFF"
+button.BackgroundColor3 = Color3.fromRGB(30,30,30)
+button.TextColor3 = Color3.new(1,1,1)
+button.Font = Enum.Font.GothamBold
+button.Parent = gui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 20)
+corner.Parent = button
+
+local function getClosest()
+	local closest = nil
+	local shortest = math.huge
+	local center = Vector2.new(camera.ViewportSize.X/2,camera.ViewportSize.Y/2)
+
+	for _,obj in pairs(workspace:GetDescendants()) do
+		if obj:IsA("Model") and obj ~= player.Character then
+			local hum = obj:FindFirstChild("Humanoid")
+			local hrp = obj:FindFirstChild("HumanoidRootPart")
+
+			if hum and hrp and hum.Health > 0 then
+				local pos,onScreen = camera:WorldToViewportPoint(hrp.Position)
+
+				if onScreen then
+					local dist = (Vector2.new(pos.X,pos.Y) - center).Magnitude
+					if dist < shortest then
+						shortest = dist
+						closest = obj
+					end
+				end
+			end
+		end
+	end
+
+	return closest
+end
+
+local function createDiamond(hrp)
+	if diamond then
+		diamond:Destroy()
+	end
+
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.new(0,60,0,60)
+	bb.AlwaysOnTop = true
+	bb.Adornee = hrp
+	bb.Parent = player.PlayerGui
+
+	local txt = Instance.new("TextLabel")
+	txt.Size = UDim2.fromScale(1,1)
+	txt.BackgroundTransparency = 1
+	txt.Text = "◇"
+	txt.TextSize = 30
+	txt.Font = Enum.Font.GothamBold
+	txt.TextColor3 = Color3.fromRGB(0,170,255)
+	txt.Parent = bb
+
+	diamond = bb
+end
+
+local function disable()
+	enabled = false
+	target = nil
+	button.Text = "Lock: OFF"
+
+	if connection then
+		connection:Disconnect()
+	end
+
+	camera.CameraType = Enum.CameraType.Custom
+
+	if diamond then
+		diamond:Destroy()
+	end
+
+	if player.Character then
+		local hum = player.Character:FindFirstChildOfClass("Humanoid")
+		if hum then
+			hum.AutoRotate = true
+		end
+	end
+end
+
+local function enable()
+	connection = RunService.RenderStepped:Connect(function()
+		if not enabled then return end
+
+		if not target then
+			target = getClosest()
+
+			if target then
+				local hrp = target:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					createDiamond(hrp)
+				end
+			else
+				return
+			end
+		end
+
+		if not player.Character then
+			disable()
+			return
+		end
+
+		local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
+		local hrp = target:FindFirstChild("HumanoidRootPart")
+		local hum = target:FindFirstChild("Humanoid")
+
+		if not myHRP or not hrp or not hum or hum.Health <= 0 then
+			target = nil
+			if diamond then diamond:Destroy() end
+			return
+		end
+
+		local myPos = myHRP.Position
+		local targetPos = hrp.Position
+
+		local look = Vector3.new(targetPos.X,myPos.Y,targetPos.Z)
+
+		local myHum = player.Character:FindFirstChildOfClass("Humanoid")
+		if myHum then
+			myHum.AutoRotate = false
+		end
+
+		myHRP.CFrame = myHRP.CFrame:Lerp(CFrame.new(myPos,look),0.3)
+
+		camera.CameraType = Enum.CameraType.Scriptable
+
+		local dir = (hrp.Position - myHRP.Position).Unit
+		local camPos = myHRP.Position - dir*8 + Vector3.new(0,3,0)
+
+		local lookCF = CFrame.new(camPos,hrp.Position)
+
+		camera.CFrame = camera.CFrame:Lerp(lookCF,0.9)
+	end)
+end
+
+button.MouseButton1Click:Connect(function()
+	enabled = not enabled
+
+	if enabled then
+		button.Text = "Lock: ON"
+		enable()
+	else
+		disable()
+	end
+end)
