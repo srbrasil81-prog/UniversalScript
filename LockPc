@@ -1,0 +1,175 @@
+-- Lock-on PC (Tecla V) — versão sem botão
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+local enabled = false
+local target = nil
+local connection = nil
+local diamond = nil
+
+-- função de Notify
+local function notify(text)
+	pcall(function()
+		StarterGui:SetCore("SendNotification",{
+			Title = "Lock System",
+			Text = text,
+			Duration = 3
+		})
+	end)
+end
+
+-- procura o alvo mais próximo
+local function getClosest()
+	local closest = nil
+	local shortest = math.huge
+	local center = Vector2.new(camera.ViewportSize.X/2,camera.ViewportSize.Y/2)
+
+	for _,obj in pairs(workspace:GetDescendants()) do
+		if obj:IsA("Model") and obj ~= player.Character then
+			local hum = obj:FindFirstChild("Humanoid")
+			local hrp = obj:FindFirstChild("HumanoidRootPart")
+
+			if hum and hrp and hum.Health > 0 then
+				local pos,onScreen = camera:WorldToViewportPoint(hrp.Position)
+				if onScreen then
+					local dist = (Vector2.new(pos.X,pos.Y)-center).Magnitude
+					if dist < shortest then
+						shortest = dist
+						closest = obj
+					end
+				end
+			end
+		end
+	end
+
+	return closest
+end
+
+-- cria diamante
+local function createDiamond(hrp)
+	if diamond then
+		diamond:Destroy()
+	end
+
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.new(0,60,0,60)
+	bb.AlwaysOnTop = true
+	bb.Adornee = hrp
+	bb.Parent = player.PlayerGui
+
+	local txt = Instance.new("TextLabel")
+	txt.Size = UDim2.fromScale(1,1)
+	txt.BackgroundTransparency = 1
+	txt.Text = "◇"
+	txt.TextSize = 30
+	txt.Font = Enum.Font.GothamBold
+	txt.TextColor3 = Color3.fromRGB(0,170,255)
+	txt.Parent = bb
+
+	diamond = bb
+end
+
+-- desativa lock
+local function disable()
+	enabled = false
+	target = nil
+	if connection then
+		connection:Disconnect()
+		connection = nil
+	end
+
+	camera.CameraType = Enum.CameraType.Custom
+
+	if diamond then
+		diamond:Destroy()
+		diamond = nil
+	end
+
+	if player.Character then
+		local hum = player.Character:FindFirstChildOfClass("Humanoid")
+		if hum then
+			hum.AutoRotate = true
+		end
+	end
+
+	notify("Lock OFF")
+end
+
+-- ativa lock
+local function enable()
+	if connection then
+		connection:Disconnect()
+	end
+
+	connection = RunService.RenderStepped:Connect(function()
+		if not enabled then return end
+
+		if not target then
+			target = getClosest()
+			if target then
+				local hrp = target:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					createDiamond(hrp)
+				end
+			else
+				return
+			end
+		end
+
+		if not player.Character then
+			disable()
+			return
+		end
+
+		local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
+		local hrp = target:FindFirstChild("HumanoidRootPart")
+		local hum = target:FindFirstChild("Humanoid")
+
+		if not myHRP or not hrp or not hum or hum.Health <= 0 then
+			target = nil
+			if diamond then diamond:Destroy() end
+			return
+		end
+
+		local myPos = myHRP.Position
+		local targetPos = hrp.Position
+		local look = Vector3.new(targetPos.X,myPos.Y,targetPos.Z)
+
+		local myHum = player.Character:FindFirstChildOfClass("Humanoid")
+		if myHum then
+			myHum.AutoRotate = false
+		end
+
+		myHRP.CFrame = myHRP.CFrame:Lerp(CFrame.new(myPos,look),0.3)
+
+		camera.CameraType = Enum.CameraType.Scriptable
+		local dir = (hrp.Position - myHRP.Position).Unit
+		local camPos = myHRP.Position - dir*8 + Vector3.new(0,3,0)
+		local lookCF = CFrame.new(camPos,hrp.Position)
+		camera.CFrame = camera.CFrame:Lerp(lookCF,0.9)
+	end)
+
+	notify("Lock ON")
+end
+
+-- tecla V ativa/desativa
+UserInputService.InputBegan:Connect(function(input,gpe)
+	if gpe then return end
+	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.V then
+		enabled = not enabled
+		if enabled then
+			enable()
+		else
+			disable()
+		end
+	end
+end)
+
+-- notificação inicial
+notify("Pressione V para ativar o Lock")
